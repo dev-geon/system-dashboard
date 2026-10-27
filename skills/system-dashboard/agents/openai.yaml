@@ -1,0 +1,4 @@
+interface:
+  display_name: "System Dashboard"
+  short_description: "Draw a repository's system structure as one linted HTML page"
+  default_prompt: "Use $system-dashboard to draw this repository's system architecture as a one-page HTML dashboard."

@@ -1,0 +1,361 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{TITLE}}</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<style>
+/* 토큰 — 색은 여기서만 정한다. 다이어그램도 이 값을 읽는다 (references/layout.md) */
+:root{
+  --brand:#1F6FEB; --brand-fill:#1F6FEB; --on-brand:#FFFFFF;
+  --bg:#F5F7FA; --surface:#FFFFFF; --ink:#14202E; --muted:#5B6B7F;
+  --line:#DCE3EC; --node:#EEF4FE; --warn:#9A6700;
+  --font:"Pretendard","Pretendard Variable",-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --brand:#4C8DF6; --brand-fill:#1F6FEB; --on-brand:#FFFFFF;
+    --bg:#0E1520; --surface:#152031; --ink:#E4EAF2; --muted:#94A3B6;
+    --line:#26354A; --node:#1A2B44; --warn:#D9A441;
+    color-scheme:dark;
+  }
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);font-size:15px;line-height:1.6;word-break:keep-all;overflow-wrap:anywhere}
+a{color:var(--brand)}
+.wrap{max-width:1200px;margin:0 auto;padding:0 16px}
+@media (min-width:720px){.wrap{padding:0 32px}}
+
+/* 성능 표 — AS IS ▶ TO BE 바로 아래. TO BE 열은 파란 강조, 변화는 칩 */
+.perf{margin:16px 0 0;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:18px 20px}
+.perf h2{margin:0 0 10px;font-size:15px;font-weight:800}
+.perf .tbl{overflow-x:auto}
+.perf table{border-collapse:collapse;width:100%;min-width:480px;font-variant-numeric:tabular-nums}
+.perf th,.perf td{padding:11px 14px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+.perf thead th{font-size:12px;color:var(--muted);font-weight:700}
+.perf th[scope=row],.perf thead th:first-child{text-align:left;font-weight:600;color:var(--ink);white-space:normal}
+.perf thead th:first-child{color:var(--muted)}
+.perf tbody tr:last-child>*{border-bottom:0}
+.perf .asis{color:var(--muted)}
+.perf td.tobe{color:var(--brand);font-weight:800;font-size:16px}
+.perf thead th.tobe{color:var(--brand)}
+.perf .chip{display:inline-block;padding:2px 9px;border-radius:999px;background:var(--bg);border:1px solid var(--line);font-size:12.5px;font-weight:700;color:var(--ink)}
+.perf-src{margin:10px 0 0;font-size:12px;color:var(--muted)}
+
+/* 화면에 보이는 머리는 두지 않는다 — AS IS 가 맨 위. 제목은 보조기술용으로만 */
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.meta{display:flex;flex-wrap:wrap;gap:6px;margin:0;padding:0;list-style:none}
+.meta li{background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:2px 10px}
+.meta b{color:var(--ink);font-weight:600}
+
+/* 관점 탭 */
+.views{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px;margin:24px 0}
+@media (min-width:720px){.views{padding:20px 24px}}
+.tabs[hidden]{display:none}
+.tabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:12px;scrollbar-width:thin}
+.tabs button{flex:none;font:inherit;font-size:14px;font-weight:700;color:var(--muted);background:transparent;border:1px solid var(--line);border-radius:12px;padding:8px 16px;cursor:pointer}
+.tabs button:hover{color:var(--ink)}
+.tabs button[aria-selected="true"]{background:var(--brand-fill);border-color:var(--brand-fill);color:var(--on-brand)}
+.tabs button:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+.panel h2{margin:4px 0 6px;font-size:16px;font-weight:600;line-height:1.5;color:var(--ink)}
+.panel .kind{margin:0 0 8px;color:var(--muted);font-size:13px}
+.panel .intro{margin:0 0 8px;max-width:72ch}
+.panel:focus-visible{outline:2px solid var(--brand);outline-offset:4px;border-radius:8px}
+.dia{margin:0;padding:12px 0;overflow-x:auto}
+pre.mermaid{margin:0;padding:16px;background:var(--bg);border:1px solid var(--line);border-radius:10px;font:13px/1.5 var(--mono);color:var(--ink);white-space:pre;text-align:left}
+pre.mermaid[data-processed]{background:none;border:0;padding:0;text-align:center;white-space:normal}
+pre.mermaid svg{max-width:100%;height:auto}
+.dia-note{margin:8px 0 0;color:var(--warn);font-size:13px}
+
+/* 구조도 — 계층을 왼쪽→오른쪽 칸으로 (흐름도의 위→아래와 구별). 선은 수평·수직 직선만.
+   참조 슬라이드처럼 흰 카드 · 파란 블록 · 굵은 이름. 새 부분은 TO BE 처럼 파란 카드 */
+.arch{overflow-x:auto;padding:8px 0 4px}
+.arch-canvas{position:relative;display:flex;align-items:stretch;justify-content:center;gap:88px;width:max-content;min-width:100%;margin:0 auto}
+.tier{position:relative;display:flex;flex-direction:column;align-items:center;gap:14px;width:200px;padding:16px 14px 20px;border-radius:16px;background:var(--bg);border:1px solid var(--line)}
+.tier-name{min-height:2.8em;display:flex;align-items:center;font-size:13px;font-weight:800;color:var(--brand);line-height:1.4;text-align:center}
+.tier-cards{flex:1;display:flex;flex-direction:column;justify-content:center;gap:44px}
+.card{position:relative;z-index:1;display:flex;flex-direction:column;gap:3px;width:172px;padding:12px 14px;border:1.5px solid var(--line);border-radius:12px;background:var(--surface);color:var(--ink);text-decoration:none}
+a.card:hover{border-color:var(--brand)}
+a.card:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+.card .ico{width:20px;height:20px;color:var(--brand);margin-bottom:4px}
+.card .nm{font-size:15px;font-weight:800;line-height:1.3;letter-spacing:-.01em}
+.card .ty{font-size:12px;color:var(--muted);line-height:1.45}
+.card .kd{position:absolute;top:11px;right:12px;font-size:10.5px;color:var(--muted)}
+.card.shape-predefined{border-style:dashed}
+.card.added{background:var(--brand-fill);border-color:var(--brand-fill);color:var(--on-brand)}
+.card.added .ico,.card.added .ty,.card.added .kd{color:var(--on-brand)}
+.card.added .ty,.card.added .kd{opacity:.85}
+svg.arch-wires{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
+.arch-labels{position:absolute;inset:0;pointer-events:none;z-index:2}
+.wl{position:absolute;transform:translate(-50%,-50%);max-width:84px;padding:2px 7px;border-radius:8px;background:var(--surface);border:1px solid var(--line);font-size:11.5px;line-height:1.35;color:var(--ink);text-align:center}
+.wl.vert{transform:translate(8px,-50%);text-align:left}
+.wl.added{border-color:var(--brand);color:var(--brand)}
+.lg-card{display:inline-flex;align-items:center;justify-content:center;width:24px;height:18px;border:1.5px solid var(--line);border-radius:5px;background:var(--surface);color:var(--brand)}
+.lg-card .ico{width:12px;height:12px;margin:0}
+.lg-card.shape-predefined{border-style:dashed}
+.lg-card.added{background:var(--brand-fill);border-color:var(--brand-fill)}
+
+/* 범례 */
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;margin:8px 0 4px;padding:10px 0 0;border-top:1px dashed var(--line);font-size:13px;color:var(--muted)}
+.legend .it{display:inline-flex;align-items:center;gap:6px}
+.sh{display:inline-block;width:22px;height:14px;border:1.5px solid var(--brand);background:var(--node)}
+.sh.terminal{border-radius:999px}
+.sh.decision{width:13px;height:13px;transform:rotate(45deg);margin:0 4px}
+.sh.io{transform:skewX(-18deg)}
+.sh.predefined{box-shadow:inset 3px 0 0 -1.5px var(--brand),inset -3px 0 0 -1.5px var(--brand)}
+.sh.db{border-radius:50%/30%}
+.sh.prep{clip-path:polygon(22% 0,78% 0,100% 50%,78% 100%,22% 100%,0 50%);border:0;background:var(--brand)}
+.sh.connector{width:14px;border-radius:50%}
+.sh.doc{border-radius:0 0 40% 0/0 0 30% 0}
+.ar{width:34px;height:10px;flex:none}
+
+/* 예시 — 흐름도 경로별 실제 사례 카드. 배지는 그림의 끝 단말 `A · …` 와 맞춘다 */
+.cases{margin-top:16px}
+.cases h3{margin:0 0 10px;font-size:15px;font-weight:700}
+.case-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin:0;padding:0;list-style:none}
+.case{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.case p{margin:0}
+.case .path{display:flex;align-items:center;gap:8px;font-weight:700;font-size:14px}
+.case .badge{display:inline-flex;align-items:center;justify-content:center;min-width:24px;height:24px;padding:0 7px;border-radius:999px;background:var(--brand-fill);color:var(--on-brand);font-size:13px;font-weight:800}
+.case .q{margin-top:10px;font-weight:600;color:var(--ink)}
+.case .r{margin-top:6px;font-size:14px;color:var(--muted);line-height:1.6}
+
+/* 흐름도 + 예시 — 그림 왼쪽, 경로별 예시 오른쪽(세로 한 줄). 좁으면 위아래로 */
+.flow-split{display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,340px);gap:28px;align-items:start}
+.flow-split .cases{margin-top:12px;position:sticky;top:16px}
+.flow-split .case-list{grid-template-columns:1fr}
+@media (max-width:899px){.flow-split{grid-template-columns:1fr;gap:0}}
+
+/* 작업 Jira — 화면 맨 아래. 티켓 번호(실제 링크) · 타이틀 · 유형 */
+.jira{margin:0 0 40px;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:18px 20px}
+.jira h2{margin:0 0 10px;font-size:15px;font-weight:800}
+.jira ul{margin:0;padding:0;list-style:none}
+.jira li{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:14px;padding:10px 2px;border-bottom:1px solid var(--line)}
+.jira li:last-child{border-bottom:0}
+.jira .key{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--brand);text-decoration:none;padding:3px 9px;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
+.jira .key:hover{border-color:var(--brand)}
+.jira .tt{font-weight:600;color:var(--ink)}
+.jira .kd{font-size:12px;color:var(--muted);padding:2px 9px;border-radius:999px;border:1px solid var(--line)}
+.jira .kd.initiative{color:var(--on-brand);background:var(--brand-fill);border-color:var(--brand-fill)}
+
+/* 히어로 — AS IS ▶ TO BE. 참조 슬라이드의 반반 분할 · 가운데 흰 삼각형 홈 · 하단 가는 선 */
+.ab-wrap{margin:16px 0 0}
+.ab{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--line);border-radius:20px;overflow:hidden;min-height:300px}
+.ab section{display:flex;flex-direction:column;justify-content:center;padding:44px 28px 48px}
+@media (min-width:720px){.ab section{padding:64px 56px}}
+.ab .as{background:var(--surface);color:var(--brand)}
+.ab .to{background:var(--brand-fill);color:var(--on-brand);position:relative}
+@media (min-width:720px){.ab .to{padding-left:80px}}
+.ab .to::before{content:"";position:absolute;left:0;top:50%;transform:translateY(-50%);border-style:solid;border-width:26px 0 26px 26px;border-color:transparent transparent transparent var(--surface)}
+.ab h2{margin:0 0 20px;font-size:clamp(32px,5vw,52px);font-weight:800;letter-spacing:-.02em;line-height:1.05}
+.ab .body{max-width:44ch;font-size:clamp(15px,1.5vw,17px);line-height:1.75;font-weight:500}
+.ab .body p{margin:0}
+.ab .body p+p{margin-top:8px}
+.ab .body ul{margin:0;padding-left:1.1em}
+@media (max-width:719px){
+  .ab{grid-template-columns:1fr;min-height:0}
+  .ab .to{padding-top:56px}
+  .ab .to::before{left:28px;top:0;transform:none;border-width:22px 22px 0 22px;border-color:var(--surface) transparent transparent transparent}
+}
+
+@media print{
+  .tabs{display:none}
+  .panel[hidden]{display:block!important}
+  .panel{break-inside:avoid;margin-bottom:24px}
+}
+</style>
+</head>
+<body>
+<h1 class="sr-only">{{TITLE}}</h1>
+
+<main class="wrap">
+{{ASISTOBE}}
+{{COMPARE}}
+
+  <section class="views" aria-label="관점">
+    <div class="tabs" role="tablist" aria-label="관점 선택">{{TABS}}</div>
+{{PANELS}}
+  </section>
+{{JIRA}}
+</main>
+
+
+<script type="module">
+// mermaid.js 는 버전을 고정해 CDN 에서 불러온다. 못 불러오면 소스를 그대로 보여 준다.
+const MERMAID_URL = "https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.esm.min.mjs";
+const KEY = "system-dashboard:" + location.pathname;
+
+const tabs = [...document.querySelectorAll('[role="tab"]')];
+const panels = [...document.querySelectorAll('[role="tabpanel"]')];
+const blocks = [...document.querySelectorAll("pre.mermaid")];
+const sources = blocks.map((el) => el.textContent);
+// 관점이 하나면 고를 것이 없으니 탭 줄을 숨긴다
+if (tabs.length < 2) document.querySelector(".tabs").hidden = true;
+
+let current = 0;
+try { current = Math.min(Number(localStorage.getItem(KEY)) || 0, tabs.length - 1); } catch (e) {}
+
+function select(i, focus) {
+  current = i;
+  tabs.forEach((t, k) => { t.setAttribute("aria-selected", String(k === i)); t.tabIndex = k === i ? 0 : -1; });
+  panels.forEach((p, k) => { p.hidden = k !== i; });
+  if (focus) tabs[i].focus();
+  try { localStorage.setItem(KEY, String(i)); } catch (e) {}
+}
+tabs.forEach((t, i) => {
+  t.addEventListener("click", () => select(i));
+  t.addEventListener("keydown", (e) => {
+    const n = tabs.length;
+    const to = { ArrowRight: (i + 1) % n, ArrowLeft: (i - 1 + n) % n, Home: 0, End: n - 1 }[e.key];
+    if (to !== undefined) { e.preventDefault(); select(to, true); }
+  });
+});
+
+const tok = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+async function render(mermaid) {
+  // 숨은 패널에서 그리면 크기가 0 으로 잡힌다 — 전부 보이게 한 뒤 그리고 탭을 되돌린다
+  panels.forEach((p) => { p.hidden = false; });
+  blocks.forEach((el, i) => { el.removeAttribute("data-processed"); el.textContent = sources[i]; });
+  const font = tok("--font");
+  mermaid.initialize({
+    startOnLoad: false,
+    securityLevel: "loose",          // click 링크를 쓰려면 필요하다. 소스는 우리 레포의 dashboard.md 뿐이다
+    theme: "base",
+    fontFamily: font,
+    flowchart: { htmlLabels: true, curve: "basis", padding: 12 },
+    sequence: { mirrorActors: false },
+    themeVariables: {
+      fontFamily: font, fontSize: "14px",
+      primaryColor: tok("--node"), primaryBorderColor: tok("--brand"), primaryTextColor: tok("--ink"),
+      secondaryColor: tok("--surface"), tertiaryColor: tok("--surface"),
+      mainBkg: tok("--node"), nodeBorder: tok("--brand"), textColor: tok("--ink"),
+      lineColor: tok("--muted"), edgeLabelBackground: tok("--surface"),
+      clusterBkg: tok("--bg"), clusterBorder: tok("--line"), titleColor: tok("--ink"),
+      actorBkg: tok("--node"), actorBorder: tok("--brand"), actorTextColor: tok("--ink"), actorLineColor: tok("--line"),
+      signalColor: tok("--muted"), signalTextColor: tok("--ink"),
+      noteBkgColor: tok("--surface"), noteBorderColor: tok("--line"), noteTextColor: tok("--ink"),
+      labelBoxBkgColor: tok("--surface"), labelBoxBorderColor: tok("--line"), labelTextColor: tok("--ink"),
+      loopTextColor: tok("--ink"), activationBkgColor: tok("--node"), activationBorderColor: tok("--brand"),
+    },
+  });
+  await mermaid.run({ nodes: blocks, suppressErrors: true });
+  // 좁은 화면에서 글자가 읽히지 않을 만큼 줄어들지 않게 한다 — 원래 폭의 75% 밑으로는 가로 스크롤
+  blocks.forEach((el) => {
+    const svg = el.querySelector("svg");
+    const w = svg && svg.viewBox && svg.viewBox.baseVal ? svg.viewBox.baseVal.width : 0;
+    if (w) svg.style.minWidth = Math.round(w * 0.75) + "px";
+  });
+  select(current);
+}
+
+// 구조도 화살표 — 직선만. 다른 칸이면 카드 옆 → 칸 사이 통로에서 꺾어 → 대상 카드 옆(직각),
+// 같은 칸이면 위아래 카드를 수직선으로 잇는다. 카드 위치를 재서 그린다
+function drawArch(root) {
+  const canvas = root.querySelector(".arch-canvas");
+  const svg = canvas.querySelector("svg.arch-wires");
+  const lab = canvas.querySelector(".arch-labels");
+  const cr = canvas.getBoundingClientRect();
+  if (!cr.width) return;                       // 숨은 탭 — 보일 때 다시 그린다(ResizeObserver)
+  const NS = "http://www.w3.org/2000/svg";
+  const css = getComputedStyle(document.documentElement);
+  const muted = css.getPropertyValue("--muted").trim(), brand = css.getPropertyValue("--brand").trim();
+  const rel = (r) => ({ x: r.left - cr.left, y: r.top - cr.top, w: r.width, h: r.height });
+  const bands = [...canvas.querySelectorAll(".tier")].map((t) => rel(t.getBoundingClientRect()));
+  const box = (id) => {
+    const el = canvas.querySelector('[data-id="' + CSS.escape(id) + '"]');
+    if (!el) return null;
+    return { ...rel(el.getBoundingClientRect()), tier: +el.dataset.tier, added: el.classList.contains("added") };
+  };
+  const edges = JSON.parse(root.dataset.edges || "[]").map((e) => ({ ...e, a: box(e.s), b: box(e.t) })).filter((e) => e.a && e.b);
+  edges.forEach((e) => { e.dir = e.b.tier > e.a.tier ? "right" : e.b.tier < e.a.tier ? "left" : "vert"; });
+  // 한 카드 가장자리에 선이 여럿이면 나눠 쓴다 — 옆 가장자리는 상대의 높이 순, 위아래는 상대의 가로 순
+  const spread = (end, other) => {
+    const g = {};
+    edges.forEach((e) => { (g[e[end] + e.dir] = g[e[end] + e.dir] || []).push(e); });
+    Object.values(g).forEach((list) => {
+      const key = (e) => (list[0].dir === "vert" ? e[other].x + e[other].w / 2 : e[other].y + e[other].h / 2);
+      list.sort((p, q) => key(p) - key(q));
+      list.forEach((e, i) => { e[end + "f"] = (i + 1) / (list.length + 1); });
+    });
+  };
+  spread("s", "b"); spread("t", "a");
+  // 한 카드에서 나가는 선은 한 줄로 나가 통로에서 대상마다 갈라진다 — 나가는 자리는 가장자리 가운데 하나
+  edges.forEach((e) => { e.sf = 0.5; });
+  // 통로 하나를 여러 카드가 쓰면 카드마다 세로 줄기를 조금씩 비킨다(같은 카드의 선은 같은 줄기)
+  const lanes = {};
+  edges.filter((e) => e.dir !== "vert").forEach((e) => {
+    const gap = e.dir === "right" ? e.a.tier : e.a.tier - 1;
+    const g = (lanes[gap] = lanes[gap] || {});
+    (g[e.s + e.dir] = g[e.s + e.dir] || []).push(e);
+  });
+  Object.entries(lanes).forEach(([gap, bySrc]) => {
+    const L = bands[+gap], R = bands[+gap + 1];
+    const mid = L && R ? (L.x + L.w + R.x) / 2 : 0;
+    const trunks = Object.values(bySrc).sort((p, q) => p[0].a.y - q[0].a.y);
+    trunks.forEach((list, i) => { list.forEach((e) => { e.mx = mid + (i - (trunks.length - 1) / 2) * 12; }); });
+  });
+  svg.innerHTML = "<defs>" + [["m", muted], ["b", brand]].map(([id, c]) =>
+    '<marker id="ah-' + id + '" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">' +
+    '<path d="M0 0L10 5L0 10z" fill="' + c + '"/></marker>').join("") + "</defs>";
+  lab.innerHTML = "";
+  edges.forEach((e) => {
+    const { a, b } = e;
+    let d, lx, ly;
+    if (e.dir === "vert") {
+      const down = b.y > a.y;
+      const x = a.x + a.w * e.sf;
+      const sy = down ? a.y + a.h : a.y, ey = down ? b.y : b.y + b.h;
+      d = "M" + x + " " + sy + " V" + ey;
+      lx = x; ly = (sy + ey) / 2;
+    } else {
+      const right = e.dir === "right";
+      const sx = right ? a.x + a.w : a.x, sy = a.y + a.h * e.sf;
+      const ex = right ? b.x : b.x + b.w, ey = b.y + b.h * e.tf;
+      d = "M" + sx + " " + sy + " H" + e.mx + " V" + ey + " H" + ex;
+      lx = e.mx; ly = ey;
+    }
+    const hot = a.added || b.added;
+    const path = document.createElementNS(NS, "path");
+    path.setAttribute("d", d);
+    path.setAttribute("fill", "none");
+    path.setAttribute("stroke", hot ? brand : muted);
+    path.setAttribute("stroke-width", e.k === "data" ? 3.5 : 1.6);
+    path.setAttribute("stroke-linejoin", "miter");
+    if (e.k === "event") path.setAttribute("stroke-dasharray", "6 4");
+    path.setAttribute("marker-end", "url(#ah-" + (hot ? "b" : "m") + ")");
+    svg.appendChild(path);
+    if (e.l) {
+      const t = document.createElement("div");
+      t.className = "wl" + (e.dir === "vert" ? " vert" : "") + (hot ? " added" : "");
+      t.textContent = e.l;
+      t.style.left = lx + "px";
+      t.style.top = ly + "px";
+      lab.appendChild(t);
+    }
+  });
+}
+document.querySelectorAll(".arch").forEach((root) => {
+  const redraw = () => drawArch(root);
+  if (window.ResizeObserver) new ResizeObserver(redraw).observe(root.querySelector(".arch-canvas"));
+  window.addEventListener("load", redraw);
+  if (document.fonts) document.fonts.ready.then(redraw);
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", redraw);
+});
+
+select(current);
+try {
+  const { default: mermaid } = await import(MERMAID_URL);
+  await render(mermaid);
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => render(mermaid));
+} catch (e) {
+  document.querySelectorAll(".dia-note").forEach((n) => { n.hidden = false; });
+  select(current);
+}
+</script>
+</body>
+</html>

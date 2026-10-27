@@ -1,0 +1,30 @@
+{
+  "name": "system-dashboard",
+  "owner": {
+    "name": "bgun42"
+  },
+  "metadata": {
+    "description": "Single-file HTML system-structure dashboards with linted architecture diagrams and flowcharts.",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "system-dashboard",
+      "source": "./",
+      "description": "Builds one HTML page that shows how a system is put together and what changes: AS IS ▶ TO BE, a performance table, a tiered left-to-right architecture, flowcharts with real use cases, and the Jira tickets behind the work.",
+      "version": "0.1.0",
+      "author": {
+        "name": "bgun42"
+      },
+      "keywords": [
+        "architecture",
+        "diagram",
+        "flowchart",
+        "dashboard",
+        "mermaid",
+        "html",
+        "documentation"
+      ]
+    }
+  ]
+}

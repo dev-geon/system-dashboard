@@ -1,0 +1,17 @@
+{
+  "name": "system-dashboard",
+  "version": "0.1.0",
+  "description": "Turns a code repository into a single-file HTML dashboard of its system structure: AS IS ▶ TO BE with a separate performance table, a left-to-right tiered architecture with straight connectors, flowcharts paired with real use cases, and the related Jira tickets, all checked by a diagram linter before the page is built.",
+  "author": {
+    "name": "bgun42"
+  },
+  "keywords": [
+    "architecture",
+    "diagram",
+    "flowchart",
+    "dashboard",
+    "mermaid",
+    "html",
+    "documentation"
+  ]
+}
