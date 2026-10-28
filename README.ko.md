@@ -89,7 +89,7 @@ load-test/report-2026-10.json 의 p95 수치, 품절 사례가 들어간 주문 
 Initiative는 https://example.atlassian.net 의 SHOP-100.
 ```
 
-순서: 읽을 사람 확인 → 레포에서 근거 달린 구성요소 후보 → 관점·사례 확정 → `dashboard.md` 작성 → `check_diagrams.py` FAIL 0까지 → `build_dashboard.py` → 화면을 열어 모든 탭 확인.
+순서: 읽을 사람·저장 폴더 확인(개발 레포 밖) → 레포에서 근거 달린 구성요소 후보 → 관점·사례 확정 → `dashboard.md` 작성 → `check_diagrams.py` FAIL 0까지 → `build_dashboard.py` → 화면을 열어 모든 탭 확인.
 
 ## 레포 구조
 

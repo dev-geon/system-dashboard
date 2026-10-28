@@ -303,6 +303,14 @@ def render(doc: Doc) -> str:
     return page
 
 
+def _git_root(path: Path) -> Optional[Path]:
+    """path 를 품은 git 작업 트리의 맨 위 폴더 — 없으면 None. `.git` 폴더·파일(worktree)을 위로 찾는다."""
+    for p in [path, *path.parents]:
+        if (p / ".git").exists():
+            return p
+    return None
+
+
 def main(argv: List[str]) -> int:
     utf8_stdio()
     force = "--force" in argv
@@ -330,6 +338,9 @@ def main(argv: List[str]) -> int:
         return 1
 
     out = out or src.with_suffix(".html")
+    repo = _git_root(out.resolve().parent)
+    if repo:
+        print(f"\n알림: 출력이 git 작업 트리({repo}) 안에 있다 — 분석하는 개발 레포라면 레포 밖 폴더로 옮긴다")
     out.write_text(render(doc), encoding="utf-8")
     print(f"\n빌드함 → {out.resolve().as_uri()}")
     return 0

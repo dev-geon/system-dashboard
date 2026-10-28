@@ -93,7 +93,7 @@ the p95 numbers from load-test/report-2026-10.json, and the order flow with a so
 Initiative is SHOP-100 on https://example.atlassian.net.
 ```
 
-Steps: ask who will read it → scan the repository for components with evidence → you confirm views and use cases → write `dashboard.md` → `check_diagrams.py` until no FAIL → `build_dashboard.py` → open the page and check every tab.
+Steps: ask who will read it and where to save the files (outside the repository being analysed) → scan the repository for components with evidence → you confirm views and use cases → write `dashboard.md` → `check_diagrams.py` until no FAIL → `build_dashboard.py` → open the page and check every tab.
 
 ## Repository structure
 
