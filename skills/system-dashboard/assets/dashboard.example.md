@@ -14,10 +14,13 @@ asof: 2026-10-27
   - 설명 문단은 두지 않는다 — 그림이 말한다
   - "asis-tobe | <비교 제목>" 절: AS IS 소절에 지금 방식의 한계, TO BE 소절에 이점 (4줄·200자, 수치 없이). 화면 맨 위에 나온다
   - "compare | <표 제목>" 절: 지표 | AS IS | TO BE | 변화 표 + "출처:" 줄 — AS IS ▶ TO BE 바로 아래
-  - 구조도: subgraph = 계층 칸(좌→우), 사람 ([ ]) · 앱 [ ] · 외부 [[ ]] · 저장소 [( )], 새 부분은 class … added
+  - "move | 이관 안내" 절(프로젝트 단위 이관일 때만): "- AS IS: <프로젝트>"·"- TO BE: <프로젝트>" 두 줄 +
+    항목 | AS IS | 이동 방식 | TO BE | 설명 표 + "참고:" 줄 — 성능 표 아래에 좌우 대응 지도로 나온다(references/layout.md L8)
+  - 구조도: subgraph = 계층 칸(좌→우), 사람 ([ ]) · 앱 [ ] · 외부 [[ ]] · 저장소 [( )], 새 부분은 class … added. 카드는 링크하지 않는다
   - 흐름도: 끝 단말을 "A · …" 로 시작하고 그림 아래 "예시" 소절에 경로별 실제 사례
   - "jira | <제목>" 절: "- [KEY-123](https://<사이트>.atlassian.net/browse/KEY-123) 타이틀 — 유형" 목록. 화면 맨 아래
-  - 규칙: references/diagram-rules.md (D1~D8), references/symbols.md (F1~F4·구조도 도형), references/layout.md (L1~L7)
+  - 구조도는 TO BE(바뀐 뒤의 모습)만 — 대체되어 사라질 AS IS 구성요소는 그리지 않는다(D9)
+  - 규칙: references/diagram-rules.md (D1~D9), references/symbols.md (F1~F4·구조도 도형), references/layout.md (L1~L7)
 -->
 
 ## asis-tobe | 알림 발송 구조 변경
@@ -66,11 +69,6 @@ flowchart LR
 
   class topic,worker added
 
-  click web "https://github.com/example-org/shop/blob/a1b2c3d/web/app/page.tsx"
-  click api "https://github.com/example-org/shop/blob/a1b2c3d/api/main.py"
-  click db "https://github.com/example-org/shop/blob/a1b2c3d/api/migrations"
-  click topic "https://github.com/example-org/shop/blob/a1b2c3d/api/events.py"
-  click worker "https://github.com/example-org/shop/blob/a1b2c3d/worker/main.py"
 ```
 
 ## view: sequence | 주문 생성 요청과 응답이 오가는 순서

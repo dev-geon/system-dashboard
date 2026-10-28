@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """dashboard.md 검사기.
 
-references/diagram-rules.md (D1~D8 · P1~P3), references/symbols.md (F1~F4),
-references/layout.md (L1 · L3 · L5 · L6 · L7) 의 표대로 판정한다.
+references/diagram-rules.md (D1~D9 · P1~P3, D8 은 폐기), references/symbols.md (F1~F4),
+references/layout.md (L1 · L3 · L4 · L5 · L6 · L7 · L8) 의 표대로 판정한다.
 
 사용:   python3 check_diagrams.py <dashboard.md> [--json]
 종료:   0 = FAIL 없음 · 1 = FAIL 있음 · 2 = 파일/인자 오류
@@ -50,6 +50,13 @@ LEVELS = {"context", "container", "component"}
 META_KEYS = ["title", "audience", "level", "repo", "ref", "asof"]
 MAX_VIEWS = 5
 MAX_NODES = 12
+# L4 폭 추정 — 템플릿 구조도(drawArch)가 화면에 맞추려고 마지막으로 시도하는 치수와 맞춘다:
+# 좁은 칸(compact) 176px · 라벨 줄바꿈 폭 96px · 통로 여백 12 · 줄기 16 · 라벨 앞 8 · 통로 최소 72.
+# 1280px 이상 화면에서 본문(.wrap 1200 − 여백)의 그림 폭이 약 1,090px 다. 이걸 넘으면 가로 스크롤이 남는다.
+ARCH_AVAIL = 1090
+ARCH_TIER = 176
+ARCH_END, ARCH_LANE, ARCH_LGAP, ARCH_MIN_GAP = 12, 16, 8, 72
+ARCH_LABEL_CAP = 96
 
 # F1 허용 도형 — 이름은 범례에도 쓴다
 SHAPE_NAMES = {
@@ -212,6 +219,11 @@ class Doc:
     cmp_rows: List[List[str]] = field(default_factory=list)
     cmp_source: str = ""                                       # `출처:` 줄
     jira_title: str = ""
+    move_title: str = ""
+    move_from: str = ""                                        # `- AS IS:` 프로젝트 줄
+    move_to: str = ""                                          # `- TO BE:` 프로젝트 줄
+    move_rows: List[Dict[str, str]] = field(default_factory=list)   # 항목·asis·kind·tobe·note
+    move_note: str = ""                                        # `참고:` 줄
     jira_items: List[Tuple[str, str, str, str]] = field(default_factory=list)   # (키, URL, 타이틀, 유형)
     asis: str = ""
     tobe: str = ""
@@ -373,6 +385,9 @@ def parse_document(path: Path) -> Doc:
         elif re.match(r"jira\b", head):
             doc.jira_title = head.partition("|")[2].strip() or "작업 Jira"
             _read_jira(lineno, body, doc)
+        elif re.match(r"move\b", head):
+            doc.move_title = head.partition("|")[2].strip() or "이관 안내"
+            _read_move(lineno, body, doc)
         elif re.match(r"compare\b", head):
             doc.cmp_title = head.partition("|")[2].strip() or "AS IS ▶ TO BE 성능 비교"
             _read_compare(lineno, body, doc)
@@ -496,6 +511,62 @@ def _read_compare(lineno: int, body: List[Tuple[int, str]], doc: Doc) -> None:
     doc.cmp_head, doc.cmp_rows = head, data
     if not doc.cmp_source:
         doc.add("WARN", "L6", "compare", lineno, "성능 표 아래 `출처: <파일·날짜·조건>` 줄이 없다 — 수치는 출처와 함께")
+
+
+MOVE_KINDS = ["포팅", "바뀜", "합침", "원천 변경", "새로", "유지", "폐기"]
+MOVE_KEEP = {"유지", "폐기"}            # 옮기지 않는 항목 — TO BE 칸이 비어도 된다(점선 빈 카드)
+MOVE_MAX_ROWS = 10
+
+
+def _read_move(lineno: int, body: List[Tuple[int, str]], doc: Doc) -> None:
+    """`## move` 이관 안내 — `- AS IS:`·`- TO BE:` 프로젝트 줄 + `| 항목 | AS IS | 이동 방식 | TO BE | 설명 |` 표 + `참고:` 줄."""
+    rows: List[List[str]] = []
+    for _, ln in body:
+        t = ln.strip()
+        m = re.match(r"[-*]\s+(AS[\s-]*IS|TO[\s-]*BE)\s*[:：]\s*(.+)$", t, re.I)
+        if m:
+            setattr(doc, "move_from" if m.group(1).upper().startswith("AS") else "move_to", m.group(2).strip())
+        elif t.startswith("|"):
+            cells = [c.strip() for c in t.strip("|").split("|")]
+            if all(re.fullmatch(r":?-{3,}:?", c) for c in cells):
+                continue
+            rows.append(cells)
+        elif re.match(r"참고\s*[:：]", t):
+            doc.move_note = re.sub(r"^참고\s*[:：]\s*", "", t)
+    if len(rows) < 2:
+        doc.add("FAIL", "P2", "move", lineno, "이관 표가 없다 — `| 항목 | AS IS | 이동 방식 | TO BE | 설명 |` 머리줄 + 1줄 이상")
+        return
+    head, data = rows[0], rows[1:]
+
+    def col(pattern: str) -> Optional[int]:
+        return next((i for i, h in enumerate(head) if re.search(pattern, h, re.I)), None)
+
+    ci = {"asis": col(r"as\s*-?\s*is"), "tobe": col(r"to\s*-?\s*be"), "kind": col(r"이동|방식"), "note": col(r"설명|비고")}
+    if None in (ci["asis"], ci["tobe"], ci["kind"]):
+        doc.add("FAIL", "P2", "move", lineno, "이관 표 머리줄에 `AS IS` · `이동 방식` · `TO BE` 열이 있어야 한다")
+        return
+    for r in data:
+        if len(r) != len(head):
+            doc.add("FAIL", "P2", "move", lineno, f"표 열 수가 다르다 — 머리 {len(head)}칸, `{' | '.join(r)}` {len(r)}칸")
+            return
+    for r in data:
+        row = {"item": r[0], "asis": r[ci["asis"]], "kind": r[ci["kind"]], "tobe": r[ci["tobe"]],
+               "note": r[ci["note"]] if ci["note"] is not None else ""}
+        doc.move_rows.append(row)
+        if not row["item"] or not row["asis"] or not row["kind"]:
+            doc.add("WARN", "L8", "move", lineno, f"`{row['item'] or '(항목 없음)'}` 줄에 빈 칸이 있다 — 항목·AS IS·이동 방식은 채운다")
+        if row["kind"] and row["kind"] not in MOVE_KINDS:
+            doc.add("WARN", "L8", "move", lineno,
+                    f"`{row['item']}` 의 이동 방식 `{row['kind']}` — {' · '.join(MOVE_KINDS)} 중 하나로 쓴다")
+        if not row["tobe"] and row["kind"] not in MOVE_KEEP:
+            doc.add("WARN", "L8", "move", lineno,
+                    f"`{row['item']}` 의 TO BE 가 비었다 — 옮기지 않는 항목이면 이동 방식을 `유지`·`폐기` 로 쓴다")
+    if not doc.move_from or not doc.move_to:
+        doc.add("WARN", "L8", "move", lineno,
+                "표 위에 `- AS IS: <프로젝트>` · `- TO BE: <프로젝트>` 줄이 없다 — 어디에서 어디로 옮기는지 먼저 보인다")
+    if len(data) > MOVE_MAX_ROWS:
+        doc.add("WARN", "L8", "move", lineno,
+                f"이관 항목 {len(data)}쌍 — {MOVE_MAX_ROWS}쌍 이하로 묶는다(파일 하나하나가 아니라 역할 단위로)")
 
 
 # ── Mermaid 읽기 ─────────────────────────────────────────────────────────────
@@ -686,6 +757,38 @@ def _has_name_type(label: str) -> bool:
     return bool(sep and name.strip() and typ.strip())
 
 
+def _label_px(text: str) -> int:
+    """라벨 상자 폭 추정(11.5px 글꼴) — 한글·전각 11px, 그 밖 6.5px, 여백·테두리 18px. 넘치면 줄바꿈 폭."""
+    px = sum(11 if ord(c) >= 0x1100 else 6.5 for c in text) + 18
+    return int(min(px, ARCH_LABEL_CAP))
+
+
+def _estimate_arch_width(view: View, nodes: Dict[str, Node]) -> int:
+    """렌더러(drawArch)와 같은 규칙으로 구조도 폭을 어림한다 — 칸 폭 합 + 통로마다 여백·줄기·라벨 구역."""
+    order = [g for g, _ in view.groups if any(n.group == g for n in nodes.values())]
+    if any(not n.group for n in nodes.values()):
+        order.append("")                                   # 계층 밖 카드는 "기타" 칸
+    tier = {k: order.index(n.group) for k, n in nodes.items() if n.group in order}
+    gaps: Dict[int, Dict[str, object]] = {i: {"r": set(), "l": set(), "rw": 0, "lw": 0} for i in range(len(order) - 1)}
+    for e in view.edges:
+        if e.src not in tier or e.dst not in tier or tier[e.src] == tier[e.dst]:
+            continue
+        right = tier[e.dst] > tier[e.src]
+        g = gaps.get(tier[e.src] if right else tier[e.src] - 1)
+        if g is None:
+            continue
+        g["r" if right else "l"].add(e.src)
+        if e.label:
+            key = "rw" if right else "lw"
+            g[key] = max(g[key], _label_px(e.label))
+    total = ARCH_TIER * len(order)
+    for g in gaps.values():
+        w = 2 * ARCH_END + (len(g["r"]) + len(g["l"])) * ARCH_LANE
+        w += (g["rw"] + ARCH_LGAP if g["rw"] else 0) + (g["lw"] + ARCH_LGAP if g["lw"] else 0)
+        total += max(ARCH_MIN_GAP, w)
+    return int(total)
+
+
 def _check_flowchart(view: View, doc: Doc) -> None:
     nodes = {k: n for k, n in view.nodes.items() if n.shape != "subgraph"}
     deg_in: Dict[str, int] = {k: 0 for k in nodes}
@@ -721,6 +824,56 @@ def _check_flowchart(view: View, doc: Doc) -> None:
     if len(nodes) > MAX_NODES:
         doc.add("WARN", "D3", view.id, view.line,
                 f"박스 {len(nodes)}개 — {MAX_NODES}개 이하로 관점을 쪼개거나 추상화 수준을 올린다")
+    # L4(폭) — 구조도는 칸 사이 통로에 줄기와 라벨 구역을 둔다. 칸이 많고 라벨이 길면 화면 폭을 넘어
+    #          그림이 가로로 스크롤된다. 렌더러와 같은 치수로 추정해 미리 알린다
+    if view.structural:
+        width = _estimate_arch_width(view, nodes)
+        if width > ARCH_AVAIL:
+            doc.add("WARN", "L4", view.id, view.line,
+                    f"구조도 폭 추정 {width}px — 칸을 좁히고 라벨을 접어도 화면(약 {ARCH_AVAIL}px)을 넘어 가로로 스크롤된다. "
+                    "칸을 합치거나(한 시스템의 진입·처리는 한 칸) 통로 라벨을 줄인다")
+    # L4(인접) — 이웃한 칸끼리, 같은 칸에서는 위아래로 붙은 카드끼리 잇는다. 사이에 카드가 있으면 선이 그 카드를 지나간다
+    if view.structural:
+        tier_order = [g for g, _ in view.groups if any(n.group == g for n in nodes.values())]
+        members = {g: [k for k, n in nodes.items() if n.group == g and n.shape in STRUCT_SHAPES] for g in tier_order}
+        name = lambda k: nodes[k].label.partition(" · ")[0] or k  # noqa: E731
+        for e in view.edges:
+            if e.src not in nodes or e.dst not in nodes:
+                continue
+            gs, gd = nodes[e.src].group, nodes[e.dst].group
+            if gs not in members or gd not in members:
+                continue
+            if gs == gd:
+                m = members[gs]
+                if e.src in m and e.dst in m and abs(m.index(e.src) - m.index(e.dst)) > 1:
+                    doc.add("WARN", "L4", view.id, e.line,
+                            f"`{name(e.src)}` → `{name(e.dst)}` — 같은 칸에서 사이에 카드를 두고 잇는다. "
+                            "선이 그 카드를 지나가니 두 카드를 연달아 정의해 위아래로 붙인다")
+            elif abs(tier_order.index(gs) - tier_order.index(gd)) > 1:
+                doc.add("WARN", "L4", view.id, e.line,
+                        f"`{name(e.src)}` → `{name(e.dst)}` — 칸을 건너뛴다. 선이 가운데 칸을 지나가니 계층을 다시 나눈다")
+    # D9 — 구조도는 바뀐 뒤의 모습(TO BE) 한 장. 새 박스와 기존 박스가 같은 칸에서 같은 대상을 함께 부르면
+    #      대체될 AS IS 구성요소가 섞였을 가능성이 크다 — 같은 대상으로 선이 두 갈래 몰려 읽히지 않는다
+    if view.structural:
+        outs: Dict[str, set] = {k: set() for k in nodes}
+        ins: Dict[str, set] = {k: set() for k in nodes}
+        for e in view.edges:
+            if e.src in nodes and e.dst in nodes:
+                outs[e.src].add(e.dst)
+                ins[e.dst].add(e.src)
+        new = [k for k, n in nodes.items() if "added" in n.classes]
+        old = [k for k, n in nodes.items() if "added" not in n.classes]
+        for b in old:
+            for a in new:
+                if nodes[a].group != nodes[b].group:
+                    continue
+                shared = outs[a] & outs[b]
+                if len(shared) >= 2 or (shared and ins[a] & ins[b]):
+                    doc.add("WARN", "D9", view.id, nodes[b].line,
+                            f"`{nodes[b].label}` 와 새 부분 `{nodes[a].label}` 이 같은 대상"
+                            f"({', '.join(sorted(shared))})을 함께 부른다 — 대체되는 AS IS 구성요소라면 "
+                            "구조도에서 빼고, 무엇이 바뀌는지는 AS IS ▶ TO BE 가 말한다")
+                    break
     # D4 · D5
     pairs = set()
     for e in view.edges:
@@ -751,18 +904,6 @@ def _check_flowchart(view: View, doc: Doc) -> None:
             if BROKER_RE.search(typ or name) and not TOPIC_RE.search(name) and deg_in[k] + deg_out[k] >= 3:
                 doc.add("WARN", "D6", view.id, n.line,
                         f"`{n.label}` 에 연결 {deg_in[k] + deg_out[k]}개 — 브로커 대신 토픽(큐)을 박스로 그린다")
-    # D8 — context 수준은 사람·외부 시스템 박스라 링크할 코드가 없으므로 비율은 보지 않는다
-    if view.structural and doc.meta.get("level") != "context":
-        targets = view.named_nodes()
-        linked = [n for n in targets if n.id in view.links]
-        if targets and len(linked) / len(targets) < 0.5:
-            doc.add("WARN", "D8", view.id, view.line,
-                    f"코드 링크 {len(linked)}/{len(targets)} — 박스마다 `click id \"레포 URL\"` 을 단다")
-    for nid, url in view.links.items():
-        if nid not in nodes:
-            doc.add("WARN", "D8", view.id, view.line, f"click 대상 `{nid}` 가 이 관점에 없다")
-        elif not url.startswith(("http://", "https://")):
-            doc.add("WARN", "D8", view.id, view.line, f"`{nid}` 링크 `{url}` — 레포 URL(https://…)로 단다")
     # F3
     for k, n in nodes.items():
         if n.shape != "decision":
@@ -799,7 +940,17 @@ def report(doc: Doc) -> str:
     return "\n".join(out)
 
 
+def utf8_stdio() -> None:
+    """Windows 콘솔(cp949 등)에서 `—`·`·` 출력이 UnicodeEncodeError 로 멈추지 않게 한다."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8")
+        except (AttributeError, ValueError):
+            pass
+
+
 def main(argv: List[str]) -> int:
+    utf8_stdio()
     args = [a for a in argv if not a.startswith("--")]
     if len(args) != 1:
         print(__doc__.strip(), file=sys.stderr)

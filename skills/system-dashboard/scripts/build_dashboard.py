@@ -20,6 +20,7 @@ from typing import List, Optional
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from check_diagrams import (  # noqa: E402
     OP_NAMES, SHAPE_NAMES, STRUCT_SHAPES, TAB_NAMES, Doc, View, parse_document, report,
+    utf8_stdio,
 )
 
 TEMPLATE = Path(__file__).resolve().parent.parent / "assets" / "dashboard.template.html"
@@ -115,12 +116,11 @@ def arch(view: View) -> str:
         for n in members:
             name, sep, typ = n.label.partition(" · ")
             cls = f"card shape-{n.shape}" + (" added" if "added" in n.classes else "")
-            url = view.links.get(n.id)
-            tag, attr = ("a", f' href="{esc(url)}" target="_blank" rel="noopener"') if url else ("div", "")
-            cards.append(f'<{tag} class="{cls}" data-id="{esc(n.id)}" data-tier="{ti}"{attr}>{_icon(n.shape)}'
+            # 카드는 링크하지 않는다(0.2.0) — 원본의 `click` 줄은 읽기만 하고 화면에 쓰지 않는다
+            cards.append(f'<div class="{cls}" data-id="{esc(n.id)}" data-tier="{ti}">{_icon(n.shape)}'
                          f'<span class="nm">{esc(name)}</span>'
                          + (f'<span class="ty">{esc(typ)}</span>' if sep else "")
-                         + f'<span class="kd">{STRUCT_SHAPES[n.shape]}</span></{tag}>')
+                         + f'<span class="kd">{STRUCT_SHAPES[n.shape]}</span></div>')
         bands.append(f'<div class="tier"><div class="tier-name">{esc(title)}</div>'
                      f'<div class="tier-cards">{"".join(cards)}</div></div>')
     edges = [{"s": e.src, "t": e.dst, "k": e.kind, "l": e.label} for e in view.edges]
@@ -245,6 +245,32 @@ def compare(doc: Doc) -> str:
             f'<div class="tbl"><table><thead><tr>{th}</tr></thead><tbody>{"".join(trs)}</tbody></table></div>{src}</section>')
 
 
+MOVE_KEEP = {"유지", "폐기"}
+
+
+def move(doc: Doc) -> str:
+    """`## move` 이관 안내 — 좌우 대응 지도. 왼쪽 AS IS 카드 ─[이동 방식]▶ 오른쪽 TO BE 카드, 옮기지 않으면 점선 빈 카드."""
+    if not doc.move_rows:
+        return ""
+    head = ('<div class="mv-row mv-head">'
+            f'<p class="mv-side as"><span class="tag">AS IS</span>{inline(doc.move_from)}</p><span></span>'
+            f'<p class="mv-side to"><span class="tag">TO BE</span>{inline(doc.move_to)}</p></div>')
+    rows = []
+    for r in doc.move_rows:
+        keep = r["kind"] in MOVE_KEEP
+        to_cls = "mv-card to" + (" keep" if keep else "")
+        to_body = (f'<span class="mv-loc">{inline(r["tobe"])}</span>' if r["tobe"] else "") + \
+                  (f'<span class="mv-note">{inline(r["note"])}</span>' if r["note"] else "")
+        rows.append('<li class="mv-row">'
+                    f'<div class="mv-card as"><span class="mv-item">{inline(r["item"])}</span>'
+                    f'<span class="mv-loc">{inline(r["asis"])}</span></div>'
+                    f'<div class="mv-link{" keep" if keep else ""}"><span class="mv-kind">{inline(r["kind"])}</span></div>'
+                    f'<div class="{to_cls}">{to_body}</div></li>')
+    note = f'<p class="perf-src">참고: {inline(doc.move_note)}</p>' if doc.move_note else ""
+    return (f'  <section class="move" aria-label="{esc(doc.move_title)}"><h2>{esc(doc.move_title)}</h2>'
+            f'{head}<ol class="mv-list">{"".join(rows)}</ol>{note}</section>')
+
+
 def jira(doc: Doc) -> str:
     """`## jira` — 작업 티켓 목록. 번호는 실제 Jira 링크, Initiative 는 파란 칩."""
     if not doc.jira_items:
@@ -265,6 +291,7 @@ def render(doc: Doc) -> str:
         "PANELS": panels(doc),
         "ASISTOBE": asis_tobe(doc),
         "COMPARE": compare(doc),
+        "MOVE": move(doc),
         "JIRA": jira(doc),
     }
     page = TEMPLATE.read_text(encoding="utf-8")
@@ -277,6 +304,7 @@ def render(doc: Doc) -> str:
 
 
 def main(argv: List[str]) -> int:
+    utf8_stdio()
     force = "--force" in argv
     args = [a for a in argv if a != "--force"]
     out: Optional[Path] = None
