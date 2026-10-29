@@ -2,7 +2,7 @@
 """dashboard.md 검사기.
 
 references/diagram-rules.md (D1~D9 · P1~P3, D8 은 폐기), references/symbols.md (F1~F4),
-references/layout.md (L1 · L3 · L4 · L5 · L6 · L7 · L8) 의 표대로 판정한다.
+references/layout.md (L1 · L3 · L4 · L5 · L6 · L7 · L8 · L9) 의 표대로 판정한다.
 
 사용:   python3 check_diagrams.py <dashboard.md> [--json]
 종료:   0 = FAIL 없음 · 1 = FAIL 있음 · 2 = 파일/인자 오류
@@ -137,6 +137,29 @@ SEQ_SKIP = re.compile(
     re.I,
 )
 SEQ_PART_RE = re.compile(r"(participant|actor)\s+(\S+?)(?:\s+as\s+(.+))?\s*$")
+
+# L6 — 화면 글에 두지 않는 출처 식별자. 테스트 이름은 모양이 정해져 있지 않아 보지 않는다(쓰는 쪽이 챙긴다)
+SOURCE_ID_RES = [
+    ("파일 경로", re.compile(r"(?:[\w.-]+/)+[\w.-]+\.[A-Za-z]{1,5}\b")),
+    ("파일:줄", re.compile(r"\b[\w-]+\.[A-Za-z]{1,5}:\d+")),
+    ("파일 이름", re.compile(r"\b[\w-]+\.(?:md|json|cs|py|ya?ml|sql|go|java|kt|rs|rb|php)\b")),
+    ("커밋 해시", re.compile(r"\b(?=[0-9a-f]*[0-9])(?=[0-9a-f]*[a-f])[0-9a-f]{7,40}\b")),
+    ("수용 기준 번호", re.compile(r"\bAC-?[A-Z]*\d+(?:-\d+)*\b")),
+]
+SOURCE_AREAS = {"asis-tobe", "compare", "example"}     # 이관 표는 위치(파일)가 내용이라 보지 않는다
+
+# L9 — 개발 용어를 직역한 말과 현업 표기. references/layout.md "용어 · L9" 표와 같게 둔다
+LITERAL_TERMS = [
+    (re.compile(r"봉투"), "envelope — 담는 것의 이름(변경 집합·페이로드)으로"),
+    (re.compile(r"덮기"), "overlay — 오버레이"),
+    (re.compile(r"(?<![가-힣])점 (?:읽기|조회)"), "point read — 포인트 읽기"),
+    (re.compile(r"발산"), "divergence — 불일치"),
+    (re.compile(r"묘비"), "tombstone — 삭제 표시(tombstone)"),
+    (re.compile(r"가림|탐침"), "shadow·probe — 뜻으로 풀기(재조회 검증 등)"),
+    (re.compile(r"결선"), "wiring — 연결"),
+    (re.compile(r"동치"), "equivalence — 일치 비교"),
+    (re.compile(r"전부 아니면 무"), "all-or-nothing — 전부 커밋 또는 전부 취소"),
+]
 SEQ_MSG_RE = re.compile(r"([^\s:+-]+?)\s*(-->>|->>|--x|-x|--\)|-\)|-->|->)\s*[+-]?\s*([^\s:+-]+)\s*:(.*)$")
 
 
@@ -227,6 +250,7 @@ class Doc:
     jira_items: List[Tuple[str, str, str, str]] = field(default_factory=list)   # (키, URL, 타이틀, 유형)
     asis: str = ""
     tobe: str = ""
+    screen: List[Tuple[str, int, str]] = field(default_factory=list)   # 화면에 나오는 글 (영역, 줄, 글) — L6·L9
     findings: List[Finding] = field(default_factory=list)
 
     def add(self, level: str, rule: str, where: str, line: int, msg: str) -> None:
@@ -406,6 +430,7 @@ def parse_document(path: Path) -> Doc:
     for v in doc.views:
         if v.code:
             check_view(v, doc)
+    _check_screen_text(doc)
     return doc
 
 
@@ -445,13 +470,14 @@ def _read_view_body(view: View, body: List[Tuple[int, str]], doc: Doc) -> None:
 def _read_asis_tobe(lineno: int, body: List[Tuple[int, str]], doc: Doc) -> None:
     parts: Dict[str, List[str]] = {}
     cur = None
-    for _, ln in body:
+    for ln_no, ln in body:
         m = re.match(r"###\s+(AS[\s-]*IS|TO[\s-]*BE)\s*$", ln.strip(), re.I)
         if m:
             cur = "asis" if m.group(1).upper().startswith("AS") else "tobe"
             parts[cur] = []
         elif cur and ln.strip():
             parts[cur].append(ln.rstrip())
+            doc.screen.append(("asis-tobe", ln_no, ln.strip()))
     for key, name in (("asis", "AS IS"), ("tobe", "TO BE")):
         if key not in parts:
             doc.add("FAIL", "P2", "asis-tobe", lineno, f"`### {name}` 소절이 없다")
@@ -489,8 +515,9 @@ def _read_jira(lineno: int, body: List[Tuple[int, str]], doc: Doc) -> None:
 
 
 def _read_compare(lineno: int, body: List[Tuple[int, str]], doc: Doc) -> None:
-    """`## compare` — 파이프 표 하나 + `출처:` 줄."""
+    """`## compare` — 파이프 표 하나. `출처:` 줄은 화면에 두지 않는다(L6) — 예전 원본 호환으로 읽기만 한다."""
     rows: List[List[str]] = []
+    row_lines: List[int] = []
     for ln_no, ln in body:
         t = ln.strip()
         if t.startswith("|"):
@@ -498,8 +525,11 @@ def _read_compare(lineno: int, body: List[Tuple[int, str]], doc: Doc) -> None:
             if all(re.fullmatch(r":?-{3,}:?", c) for c in cells):
                 continue
             rows.append(cells)
+            row_lines.append(ln_no)
         elif re.match(r"출처\s*[:：]", t):
             doc.cmp_source = re.sub(r"^출처\s*[:：]\s*", "", t)
+            doc.add("WARN", "L6", "compare", ln_no,
+                    "`출처:` 줄은 화면에 두지 않는다 — 수치의 근거는 7단계 답변으로, 화면의 근거 링크는 작업 Jira 절 하나")
     if len(rows) < 2:
         doc.add("FAIL", "P2", "compare", lineno, "성능 표가 없다 — 머리줄 + 1줄 이상의 `| 지표 | AS IS | TO BE | 변화 |` 표")
         return
@@ -509,8 +539,8 @@ def _read_compare(lineno: int, body: List[Tuple[int, str]], doc: Doc) -> None:
             doc.add("FAIL", "P2", "compare", lineno, f"표 열 수가 다르다 — 머리 {len(head)}칸, `{' | '.join(r)}` {len(r)}칸")
             return
     doc.cmp_head, doc.cmp_rows = head, data
-    if not doc.cmp_source:
-        doc.add("WARN", "L6", "compare", lineno, "성능 표 아래 `출처: <파일·날짜·조건>` 줄이 없다 — 수치는 출처와 함께")
+    doc.screen.append(("compare", row_lines[0], " | ".join(head)))
+    doc.screen.extend(("compare", ln_no, " | ".join(r)) for ln_no, r in zip(row_lines[1:], data))
 
 
 MOVE_KINDS = ["포팅", "바뀜", "합침", "원천 변경", "새로", "유지", "폐기"]
@@ -521,7 +551,8 @@ MOVE_MAX_ROWS = 10
 def _read_move(lineno: int, body: List[Tuple[int, str]], doc: Doc) -> None:
     """`## move` 이관 안내 — `- AS IS:`·`- TO BE:` 프로젝트 줄 + `| 항목 | AS IS | 이동 방식 | TO BE | 설명 |` 표 + `참고:` 줄."""
     rows: List[List[str]] = []
-    for _, ln in body:
+    row_lines: List[int] = []
+    for ln_no, ln in body:
         t = ln.strip()
         m = re.match(r"[-*]\s+(AS[\s-]*IS|TO[\s-]*BE)\s*[:：]\s*(.+)$", t, re.I)
         if m:
@@ -531,6 +562,7 @@ def _read_move(lineno: int, body: List[Tuple[int, str]], doc: Doc) -> None:
             if all(re.fullmatch(r":?-{3,}:?", c) for c in cells):
                 continue
             rows.append(cells)
+            row_lines.append(ln_no)
         elif re.match(r"참고\s*[:：]", t):
             doc.move_note = re.sub(r"^참고\s*[:：]\s*", "", t)
     if len(rows) < 2:
@@ -549,10 +581,11 @@ def _read_move(lineno: int, body: List[Tuple[int, str]], doc: Doc) -> None:
         if len(r) != len(head):
             doc.add("FAIL", "P2", "move", lineno, f"표 열 수가 다르다 — 머리 {len(head)}칸, `{' | '.join(r)}` {len(r)}칸")
             return
-    for r in data:
+    for ln_no, r in zip(row_lines[1:], data):
         row = {"item": r[0], "asis": r[ci["asis"]], "kind": r[ci["kind"]], "tobe": r[ci["tobe"]],
                "note": r[ci["note"]] if ci["note"] is not None else ""}
         doc.move_rows.append(row)
+        doc.screen.append(("move", ln_no, f"{row['item']} | {row['note']}"))
         if not row["item"] or not row["asis"] or not row["kind"]:
             doc.add("WARN", "L8", "move", lineno, f"`{row['item'] or '(항목 없음)'}` 줄에 빈 칸이 있다 — 항목·AS IS·이동 방식은 채운다")
         if row["kind"] and row["kind"] not in MOVE_KINDS:
@@ -930,6 +963,29 @@ def _check_flowchart(view: View, doc: Doc) -> None:
             doc.add("FAIL", "F4", view.id, view.line, "시작 단말 `([ ])` 이 없다 — 나가는 화살표만 있는 단말")
         if not any(deg_out[k] == 0 and deg_in[k] > 0 for k in terms):
             doc.add("FAIL", "F4", view.id, view.line, "끝 단말 `([ ])` 이 없다 — 들어오는 화살표만 있는 단말")
+
+
+# ── 화면 글 ──────────────────────────────────────────────────────────────────
+
+def _check_screen_text(doc: Doc) -> None:
+    """L6 출처 식별자 · L9 직역어 — 화면에 나오는 글만 본다(작업 Jira 절은 티켓 원문 인용이라 뺀다)."""
+    texts = list(doc.screen)
+    for v in doc.views:
+        texts += [("label", n.line, n.label) for n in v.nodes.values() if n.label]
+        texts += [("label", e.line, e.label) for e in v.edges if e.label]
+        texts += [("example", ln_no, t) for ln_no, t in v.examples]
+    for area, ln_no, text in texts:
+        if area in SOURCE_AREAS:
+            for name, rx in SOURCE_ID_RES:
+                m = rx.search(text)
+                if m:
+                    doc.add("WARN", "L6", area, ln_no,
+                            f"{name} `{m.group(0)}` — 출처는 화면에 쓰지 않는다. 뜻만 남기고 근거는 7단계 답변으로")
+                    break
+        for rx, alt in LITERAL_TERMS:
+            m = rx.search(text)
+            if m:
+                doc.add("WARN", "L9", area, ln_no, f"`{m.group(0)}` 은 개발 용어 직역 — {alt}")
 
 
 # ── 실행 ─────────────────────────────────────────────────────────────────────

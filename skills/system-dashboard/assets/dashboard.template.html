@@ -43,6 +43,10 @@ a{color:var(--brand)}
 .perf .asis{color:var(--muted)}
 .perf td.tobe{color:var(--brand);font-weight:800;font-size:16px}
 .perf thead th.tobe{color:var(--brand)}
+.perf th[scope=row]{min-width:180px}
+.perf th.note,.perf td.note{text-align:left;white-space:normal;min-width:260px}
+.perf td.note{color:var(--muted);font-size:13px;line-height:1.55}
+.perf td.note strong{color:var(--ink)}
 .perf .chip{display:inline-block;padding:2px 9px;border-radius:999px;background:var(--bg);border:1px solid var(--line);font-size:12.5px;font-weight:700;color:var(--ink)}
 .perf-src{margin:10px 0 0;font-size:12px;color:var(--muted)}
 /* 이관 안내 — 프로젝트 단위로 옮기는 작업의 좌우 대응 지도. 왼쪽 AS IS 흰 카드 ─[이동 방식]▶ 오른쪽 TO BE 파란 카드.

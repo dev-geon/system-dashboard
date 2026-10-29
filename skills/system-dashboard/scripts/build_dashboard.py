@@ -227,7 +227,8 @@ def compare(doc: Doc) -> str:
         return ""
     head = doc.cmp_head
     kinds = ["tobe" if re.search(r"to\s*-?\s*be", h, re.I) else "asis" if re.search(r"as\s*-?\s*is", h, re.I)
-             else "delta" if re.search(r"변화|차이|증감|delta", h, re.I) else "" for h in head]
+             else "delta" if re.search(r"변화|차이|증감|delta", h, re.I)
+             else "note" if re.search(r"예시|사례|설명|비고|note|example", h, re.I) else "" for h in head]   # note = 글자 열(줄바꿈·왼쪽 정렬)
     th = "".join(f'<th class="{k}">{inline(h)}</th>' for h, k in zip(head, kinds))
     trs = []
     for row in doc.cmp_rows:
