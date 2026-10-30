@@ -1,6 +1,6 @@
 {
   "name": "system-dashboard",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Draw a repository's system structure as a single-file HTML dashboard with linted diagrams.",
   "author": {
     "name": "bgun42",

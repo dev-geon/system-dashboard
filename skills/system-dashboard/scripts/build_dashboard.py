@@ -72,6 +72,134 @@ def blocks(text: str) -> str:
     return "".join(out)
 
 
+def md_inline(text: str) -> str:
+    """답 원문 한 줄 — 이스케이프 뒤 `코드`·**굵게**·*기울임*·[링크](http…) 만 푼다(원문 HTML 은 글자로 보인다)."""
+    codes: List[str] = []
+
+    def keep(m: "re.Match[str]") -> str:
+        codes.append(f"<code>{m.group(1)}</code>")
+        return f"\x00{len(codes) - 1}\x00"
+
+    s = re.sub(r"`([^`]+)`", keep, esc(text))
+    s = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", s)
+    s = re.sub(r"(?<![\w*])\*(?!\s)([^*]+?)(?<!\s)\*(?![\w*])", r"<em>\1</em>", s)
+    s = re.sub(r"\[([^\]]+)\]\((https?://[^)\s]+)\)", r'<a href="\2" target="_blank" rel="noopener">\1</a>', s)
+    return re.sub(r"\x00(\d+)\x00", lambda m: codes[int(m.group(1))], s)
+
+
+TABLE_SEP_RE = re.compile(r"\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$")
+LIST_RE = re.compile(r"(\s*)([-*+]|\d+[.)])\s+(.*)$")
+
+
+def _cells(row: str) -> List[str]:
+    row = row.strip()
+    if row.startswith("|"):
+        row = row[1:]
+    if row.endswith("|"):
+        row = row[:-1]
+    return [c.strip() for c in row.split("|")]
+
+
+def md_to_html(text: str) -> str:
+    """답 원문(마크다운)의 일부 — 제목·문단·목록(한 단 중첩)·표·인용·구분선·코드 블록 — 를 HTML 로. 표준 라이브러리만."""
+    lines = text.split("\n")
+    out: List[str] = []
+    para: List[str] = []
+    i = 0
+
+    def flush() -> None:
+        if para:
+            out.append(f"<p>{md_inline(' '.join(para))}</p>")
+            para.clear()
+
+    while i < len(lines):
+        ln = lines[i]
+        s = ln.strip()
+        fence = re.match(r"(`{3,})", s)
+        if fence:
+            flush()
+            n, body = len(fence.group(1)), []
+            i += 1
+            while i < len(lines) and not re.fullmatch(r"\s*`{%d,}\s*" % n, lines[i]):
+                body.append(lines[i])
+                i += 1
+            out.append(f"<pre><code>{esc(chr(10).join(body))}</code></pre>")
+            i += 1
+            continue
+        if not s:
+            flush()
+            i += 1
+            continue
+        head = re.match(r"(#{1,6})\s+(.*)$", s)
+        if head:
+            flush()
+            level = min(6, max(4, len(head.group(1)) + 3))
+            out.append(f"<h{level}>{md_inline(head.group(2).rstrip('#').strip())}</h{level}>")
+            i += 1
+            continue
+        if re.fullmatch(r"(-\s*){3,}|(\*\s*){3,}|(_\s*){3,}", s):
+            flush()
+            out.append("<hr>")
+            i += 1
+            continue
+        if "|" in s and i + 1 < len(lines) and TABLE_SEP_RE.fullmatch(lines[i + 1]):
+            flush()
+            head_cells = _cells(s)
+            rows = []
+            i += 2
+            while i < len(lines) and "|" in lines[i] and lines[i].strip():
+                rows.append(_cells(lines[i]))
+                i += 1
+            th = "".join(f"<th>{md_inline(c)}</th>" for c in head_cells)
+            trs = "".join("<tr>" + "".join(f"<td>{md_inline(c)}</td>" for c in r) + "</tr>" for r in rows)
+            out.append(f'<div class="md-tbl"><table><thead><tr>{th}</tr></thead><tbody>{trs}</tbody></table></div>')
+            continue
+        if s.startswith(">"):
+            flush()
+            quote = []
+            while i < len(lines) and lines[i].strip().startswith(">"):
+                quote.append(re.sub(r"^\s*>\s?", "", lines[i]))
+                i += 1
+            out.append(f"<blockquote>{md_to_html(chr(10).join(quote))}</blockquote>")
+            continue
+        item = LIST_RE.match(ln)
+        if item:
+            flush()
+            ordered = item.group(2)[0].isdigit()
+            base = len(item.group(1))
+            lis: List[str] = []
+            while i < len(lines):
+                m = LIST_RE.match(lines[i])
+                if not m:
+                    if lines[i].strip() and lines[i].startswith(" " * (base + 2)) and lis:
+                        lis[-1] += " " + md_inline(lines[i].strip())   # 이어진 줄
+                        i += 1
+                        continue
+                    break
+                if len(m.group(1)) > base and lis:   # 한 단 중첩
+                    sub = []
+                    while i < len(lines):
+                        mm = LIST_RE.match(lines[i])
+                        if not mm or len(mm.group(1)) <= base:
+                            break
+                        sub.append(f"<li>{md_inline(mm.group(3))}</li>")
+                        i += 1
+                    tag = "ol" if m.group(2)[0].isdigit() else "ul"
+                    lis[-1] += f"<{tag}>{''.join(sub)}</{tag}>"
+                    continue
+                if len(m.group(1)) < base:
+                    break
+                lis.append(md_inline(m.group(3)))
+                i += 1
+            tag = "ol" if ordered else "ul"
+            out.append(f"<{tag}>" + "".join(f"<li>{x}</li>" for x in lis) + f"</{tag}>")
+            continue
+        para.append(s)
+        i += 1
+    flush()
+    return "".join(out)
+
+
 # ── 조각 ─────────────────────────────────────────────────────────────────────
 
 def tabs(doc: Doc) -> str:
@@ -272,6 +400,33 @@ def move(doc: Doc) -> str:
             f'{head}<ol class="mv-list">{"".join(rows)}</ol>{note}</section>')
 
 
+ANSWER_SIDES = (("as-is", "AS IS", "as"), ("to-be", "TO BE", "to"))
+
+
+def answers(doc: Doc) -> str:
+    """`## answers` 질문별 답 전문 — 질문마다 접는 카드, 안에 AS IS(왼쪽)·TO BE(오른쪽) 답 원문과 메타 줄."""
+    if not doc.answers:
+        return ""
+    items = []
+    for n, it in enumerate(doc.answers, 1):
+        texts, metas = it["text"], it["meta"]
+        sides = []
+        for key, label, cls in ANSWER_SIDES:
+            if key not in texts:   # type: ignore[operator]
+                continue
+            meta = f'<span class="ans-meta">{inline(metas[key])}</span>' if key in metas else ""   # type: ignore[index,operator]
+            sides.append(f'<article class="ans-side {cls}"><header><span class="tag">{label}</span>{meta}</header>'
+                         f'<div class="md">{md_to_html(texts[key])}</div></article>')   # type: ignore[index]
+        pair_cls = "ans-pair" + (" one" if len(sides) == 1 else "")
+        items.append(f'<details class="ans"><summary><span class="ans-n">#{n}</span>'
+                     f'<span class="ans-q">{inline(str(it["question"]))}</span></summary>'
+                     f'<div class="{pair_cls}">{"".join(sides)}</div></details>')
+    return (f'  <section class="answers" aria-label="{esc(doc.answers_title)}">'
+            f'<h2><span>{esc(doc.answers_title)}</span>'
+            f'<button class="ans-toggle" type="button" aria-pressed="false">모두 펼치기</button></h2>'
+            f'{"".join(items)}</section>')
+
+
 def jira(doc: Doc) -> str:
     """`## jira` — 작업 티켓 목록. 번호는 실제 Jira 링크, Initiative 는 파란 칩."""
     if not doc.jira_items:
@@ -293,6 +448,7 @@ def render(doc: Doc) -> str:
         "ASISTOBE": asis_tobe(doc),
         "COMPARE": compare(doc),
         "MOVE": move(doc),
+        "ANSWERS": answers(doc),
         "JIRA": jira(doc),
     }
     page = TEMPLATE.read_text(encoding="utf-8")

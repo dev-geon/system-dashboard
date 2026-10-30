@@ -15,14 +15,17 @@ asof: 2026-10-27
   - "asis-tobe | <비교 제목>" 절: AS IS 소절에 지금 방식의 한계, TO BE 소절에 이점 (4줄·200자, 수치 없이). 화면 맨 위에 나온다
   - "compare | <표 제목>" 절: 지표 | AS IS | TO BE | 변화 | 예시(선택) 표 — AS IS ▶ TO BE 바로 아래.
     출처(파일 경로·커밋·기준 번호·테스트 이름)는 화면에 쓰지 않는다 — 근거는 답변으로, 화면의 근거 링크는 작업 Jira 절 하나(L6)
-  - 개발 용어는 직역하지 않는다 — 봉투·덮기·발산 대신 변경 집합·오버레이·불일치처럼 현업 표기(L9)
+  - 개발 용어는 직역하지 않는다 — 봉투·덮기·발산·서랍 대신 변경 집합·오버레이·불일치·drawer 처럼 현업 표기(L9)
+  - 일반 IT 약어(KB·SSOT·TTL…)는 처음 나올 때 풀어 쓴다 — KB(지식 베이스)·지식 베이스(KB). 그림 라벨에서는 풀어 쓴 낱말로(L10)
   - "move | 이관 안내" 절(프로젝트 단위 이관일 때만): "- AS IS: <프로젝트>"·"- TO BE: <프로젝트>" 두 줄 +
     항목 | AS IS | 이동 방식 | TO BE | 설명 표 + "참고:" 줄 — 성능 표 아래에 좌우 대응 지도로 나온다(references/layout.md L8)
   - 구조도: subgraph = 계층 칸(좌→우), 사람 ([ ]) · 앱 [ ] · 외부 [[ ]] · 저장소 [( )], 새 부분은 class … added. 카드는 링크하지 않는다
   - 흐름도: 끝 단말을 "A · …" 로 시작하고 그림 아래 "예시" 소절에 경로별 실제 사례
+  - "answers | <제목>" 절(선택 — 같은 질문을 AS IS·TO BE 로 돌려 본 기록이 있을 때만): "### <질문>" + 선택 메타 줄 "- AS IS: …"·"- TO BE: …"
+    + 답 원문 펜스(백틱 4개 이상 + answer as-is / answer to-be). 답은 고치지 않는다 — 관점 탭 아래·작업 Jira 위에 접는 줄로 나온다(L11)
   - "jira | <제목>" 절: "- [KEY-123](https://<사이트>.atlassian.net/browse/KEY-123) 타이틀 — 유형" 목록. 화면 맨 아래
   - 구조도는 TO BE(바뀐 뒤의 모습)만 — 대체되어 사라질 AS IS 구성요소는 그리지 않는다(D9)
-  - 규칙: references/diagram-rules.md (D1~D9), references/symbols.md (F1~F4·구조도 도형), references/layout.md (L1~L9)
+  - 규칙: references/diagram-rules.md (D1~D9), references/symbols.md (F1~F4·구조도 도형), references/layout.md (L1~L10)
 -->
 
 ## asis-tobe | 알림 발송 구조 변경

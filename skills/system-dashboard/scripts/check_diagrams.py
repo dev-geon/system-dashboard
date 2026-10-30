@@ -2,7 +2,7 @@
 """dashboard.md 검사기.
 
 references/diagram-rules.md (D1~D9 · P1~P3, D8 은 폐기), references/symbols.md (F1~F4),
-references/layout.md (L1 · L3 · L4 · L5 · L6 · L7 · L8 · L9) 의 표대로 판정한다.
+references/layout.md (L1 · L3 · L4 · L5 · L6 · L7 · L8 · L9 · L10) 의 표대로 판정한다.
 
 사용:   python3 check_diagrams.py <dashboard.md> [--json]
 종료:   0 = FAIL 없음 · 1 = FAIL 있음 · 2 = 파일/인자 오류
@@ -159,7 +159,56 @@ LITERAL_TERMS = [
     (re.compile(r"결선"), "wiring — 연결"),
     (re.compile(r"동치"), "equivalence — 일치 비교"),
     (re.compile(r"전부 아니면 무"), "all-or-nothing — 전부 커밋 또는 전부 취소"),
+    (re.compile(r"서랍(?!장)"), "drawer — 코드 이름 drawer 그대로, 처음 한 번 뜻을 괄호로: drawer(미리 정의된 질의). UI 패널이면 드로어"),
+    (re.compile(r"갈고리"), "hook — 훅"),
+    (re.compile(r"되부름|되부르기"), "callback — 콜백"),
+    (re.compile(r"양동이"), "bucket — 버킷"),
+    (re.compile(r"죽은 편지"), "dead letter — 데드레터(처리 못 한 메시지)"),
+    (re.compile(r"뜨거운 경로"), "hot path — 핫 패스(자주 타는 경로)"),
+    (re.compile(r"차가운 시작"), "cold start — 콜드 스타트"),
 ]
+
+# L10 — 처음 나올 때 풀어 써야 하는 일반 IT 약어와 풀이. references/layout.md "약어 · L10" 표와 같게 둔다.
+#       도메인 약어(업종·규제 용어)와 코드 식별자는 번역하지 않는 이름이라 넣지 않는다 — 그래서 "대문자 낱말
+#       전부"가 아니라 이 목록만 본다. 다른 뜻으로 쓰일 일이 드문 약어만 둔다
+ABBREVIATIONS: List[Tuple[str, str]] = [
+    ("KB", "지식 베이스"),
+    ("SSOT", "단일 정본"),
+    ("PII", "개인 식별 정보"),
+    ("RU", "요청 단위"),
+    ("TTL", "유효 시간"),
+    ("SLA", "서비스 수준 협약"),
+    ("SLO", "서비스 수준 목표"),
+    ("RLS", "행 수준 보안"),
+    ("ETL", "추출·변환·적재"),
+    ("CDC", "변경 데이터 캡처"),
+    ("DTO", "데이터 전달 객체"),
+    ("PK", "기본 키"),
+    ("FK", "외래 키"),
+    ("DLQ", "실패 메시지 큐"),
+    ("ACL", "접근 제어 목록"),
+    ("RBAC", "역할 기반 접근 제어"),
+    ("CQRS", "명령·조회 책임 분리"),
+    ("RPO", "복구 시점 목표"),
+    ("RTO", "복구 시간 목표"),
+    ("MTTR", "평균 복구 시간"),
+    ("IdP", "인증 제공자"),
+    ("IaC", "코드형 인프라"),
+    ("PoC", "개념 검증"),
+]
+ABBR_ALIASES = {"PoC": "PoC|POC"}                                   # 같은 약어의 다른 표기
+# 약어 앞뒤가 영문·숫자·`_`·`-` 에 붙어 있으면 코드 이름(PK_ORDER·order-PK)이라 보지 않는다. 뒤에 `-숫자` 면 티켓 키(ETL-12).
+# 한글은 붙어도 된다 — "KB를" 처럼 조사가 바로 붙는다. KB 앞에 숫자가 있으면(512 KB) 용량 단위다
+ABBR_RES = [
+    (name, re.compile(r"(?<![A-Za-z0-9_\-])" + (r"(?<!\d )" if name == "KB" else "")
+                      + rf"(?:{ABBR_ALIASES.get(name, name)})(?![A-Za-z0-9_])(?!-\d)"), full)
+    for name, full in ABBREVIATIONS
+]
+ABBR_AFTER_RE = re.compile(r"\s*[(（]\s*[A-Za-z가-힣]")              # KB(지식 베이스) — 괄호 안은 글자로 시작
+ABBR_BEFORE_RE = re.compile(r"[A-Za-z가-힣]\s*[(（]\s*$")            # 지식 베이스(KB) — 괄호 바로 앞에 낱말
+ABBR_BEFORE_CLOSE_RE = re.compile(r"\s*(?:[)）]|[,·/;:]\s*[^)）]*[)）])")
+CODE_SPAN_RE = re.compile(r"`[^`]*`")
+SCREEN_ORDER = {"asis-tobe": 0, "compare": 1, "move": 2}           # 화면에 나오는 차례 — 관점(그림·예시)은 그 뒤
 SEQ_MSG_RE = re.compile(r"([^\s:+-]+?)\s*(-->>|->>|--x|-x|--\)|-\)|-->|->)\s*[+-]?\s*([^\s:+-]+)\s*:(.*)$")
 
 
@@ -248,9 +297,11 @@ class Doc:
     move_rows: List[Dict[str, str]] = field(default_factory=list)   # 항목·asis·kind·tobe·note
     move_note: str = ""                                        # `참고:` 줄
     jira_items: List[Tuple[str, str, str, str]] = field(default_factory=list)   # (키, URL, 타이틀, 유형)
+    answers_title: str = ""
+    answers: List[Dict[str, object]] = field(default_factory=list)  # 질문별 답 전문 — line·question·meta{as,to}·text{as,to}
     asis: str = ""
     tobe: str = ""
-    screen: List[Tuple[str, int, str]] = field(default_factory=list)   # 화면에 나오는 글 (영역, 줄, 글) — L6·L9
+    screen: List[Tuple[str, int, str]] = field(default_factory=list)   # 화면에 나오는 글 (영역, 줄, 글) — L6·L9·L10
     findings: List[Finding] = field(default_factory=list)
 
     def add(self, level: str, rule: str, where: str, line: int, msg: str) -> None:
@@ -378,14 +429,20 @@ def parse_document(path: Path) -> Doc:
     lines = _blank_comments(path.read_text(encoding="utf-8")).split("\n")
     start = parse_front_matter(lines, doc)
 
-    # `## ` 절로 자른다 (코드 블록 안의 ## 는 건너뛴다)
+    # `## ` 절로 자른다 (코드 블록 안의 ## 는 건너뛴다). 펜스는 연 백틱 수 이상으로만 닫힌다 —
+    # 답 전문(`## answers`)은 ```` 네 개로 감싸 안에 든 ``` 코드 블록·`## ` 제목을 원문 그대로 둔다
     sections: List[Tuple[int, str, List[Tuple[int, str]]]] = []
-    in_fence = False
+    fence = 0
     for i in range(start, len(lines)):
         ln = lines[i]
-        if ln.strip().startswith("```"):
-            in_fence = not in_fence
-        if not in_fence and ln.startswith("## "):
+        tick = re.match(r"\s*(`{3,})(.*)$", ln)
+        if tick:
+            n, rest = len(tick.group(1)), tick.group(2).strip()
+            if not fence:
+                fence = n
+            elif n >= fence and not rest:
+                fence = 0
+        if not fence and ln.startswith("## ") and not tick:
             sections.append((i + 1, ln[3:].strip(), []))
         elif sections:
             sections[-1][2].append((i + 1, ln))
@@ -418,6 +475,9 @@ def parse_document(path: Path) -> Doc:
         elif re.match(r"asis-tobe\b", head):
             doc.ab_title = head.partition("|")[2].strip() or "AS IS ▶ TO BE"
             _read_asis_tobe(lineno, body, doc)
+        elif re.match(r"answers\b", head):
+            doc.answers_title = head.partition("|")[2].strip() or "질문별 답"
+            _read_answers(lineno, body, doc)
         else:
             doc.add("WARN", "P2", "문서", lineno, f"알 수 없는 절 `## {head}` — 화면에 나오지 않는다")
 
@@ -512,6 +572,67 @@ def _read_jira(lineno: int, body: List[Tuple[int, str]], doc: Doc) -> None:
         doc.jira_items.append((key, url, title, kind))
     if not doc.jira_items:
         doc.add("WARN", "L7", "jira", lineno, "작업 Jira 절에 티켓이 없다")
+
+
+ANSWER_FENCE_RE = re.compile(r"\s*(`{4,})\s*answer\s+(as-is|to-be)\s*$", re.I)
+ANSWER_META_RE = re.compile(r"[-*]\s+(AS\s*IS|TO\s*BE)\s*[:：]\s*(.+)$", re.I)
+MAX_ANSWERS = 30
+
+
+def _read_answers(lineno: int, body: List[Tuple[int, str]], doc: Doc) -> None:
+    """`## answers` — 질문(사례)마다 `### 질문` + 선택 메타 줄 `- AS IS: …`·`- TO BE: …` + 답 원문 펜스
+    (```` answer as-is / ```` answer to-be — 백틱 4개 이상, 같은 수 이상으로 닫는다).
+
+    답·질문·메타는 기록 원문 인용이라 화면 글 검사(L6·L9·L10) 대상이 아니다 — doc.screen 에 넣지 않는다.
+    """
+    item: Optional[Dict[str, object]] = None
+    fence = 0
+    side = ""
+    buf: List[str] = []
+    for ln_no, ln in body:
+        if fence:
+            close = re.match(r"\s*(`{3,})\s*$", ln)
+            if close and len(close.group(1)) >= fence:
+                item["text"][side] = "\n".join(buf).strip("\n")   # type: ignore[index]
+                fence, buf = 0, []
+            else:
+                buf.append(ln)
+            continue
+        t = ln.strip()
+        if not t:
+            continue
+        head = re.match(r"###\s+(\S.*)$", t)
+        if head:
+            item = {"line": ln_no, "question": head.group(1).strip(), "meta": {}, "text": {}}
+            doc.answers.append(item)
+            continue
+        opened = ANSWER_FENCE_RE.fullmatch(ln)
+        if opened or re.match(r"\s*`{3,}", ln):
+            if item is None:
+                doc.add("FAIL", "P2", "answers", ln_no, "답 펜스가 `### <질문>` 앞에 있다 — 질문 제목 아래에 둔다")
+                return
+            if not opened:
+                doc.add("FAIL", "P2", "answers", ln_no,
+                        "답 펜스는 백틱 4개 이상 + `answer as-is` 또는 `answer to-be` 로 연다 — 예: ````answer to-be")
+                return
+            fence, side, buf = len(opened.group(1)), opened.group(2).lower(), []
+            if side in item["text"]:   # type: ignore[operator]
+                doc.add("WARN", "P2", "answers", ln_no, f"`{item['question']}` 에 `answer {side}` 가 두 번 — 뒤의 것만 쓴다")
+            continue
+        meta = ANSWER_META_RE.fullmatch(t)
+        if meta and item is not None:
+            item["meta"]["to-be" if meta.group(1).upper().replace(" ", "") == "TOBE" else "as-is"] = meta.group(2).strip()   # type: ignore[index]
+            continue
+        doc.add("WARN", "L5", "answers", ln_no, f"`{t[:40]}` — 답 절의 설명 글은 화면에 나오지 않는다(질문 제목·메타 줄·답 펜스만)")
+    if fence:
+        doc.add("FAIL", "P2", "answers", lineno, f"`{item['question']}` 의 답 펜스가 닫히지 않았다")   # type: ignore[index]
+    if not doc.answers:
+        doc.add("FAIL", "P2", "answers", lineno, "답 절에 `### <질문>` 항목이 없다")
+    for it in doc.answers:
+        if not any((it["text"] or {}).values()):   # type: ignore[union-attr]
+            doc.add("FAIL", "P2", "answers", int(it["line"]), f"`{it['question']}` 에 답(```` answer as-is / to-be 펜스)이 없다")
+    if len(doc.answers) > MAX_ANSWERS:
+        doc.add("WARN", "L11", "answers", lineno, f"답 항목이 {len(doc.answers)}개 — {MAX_ANSWERS}개 이하로 고르거나 대시보드를 나눈다")
 
 
 def _read_compare(lineno: int, body: List[Tuple[int, str]], doc: Doc) -> None:
@@ -967,13 +1088,60 @@ def _check_flowchart(view: View, doc: Doc) -> None:
 
 # ── 화면 글 ──────────────────────────────────────────────────────────────────
 
-def _check_screen_text(doc: Doc) -> None:
-    """L6 출처 식별자 · L9 직역어 — 화면에 나오는 글만 본다(작업 Jira 절은 티켓 원문 인용이라 뺀다)."""
-    texts = list(doc.screen)
+def _screen_texts(doc: Doc) -> List[Tuple[str, int, str]]:
+    """화면에 나오는 글을 화면 차례대로 — AS IS ▶ TO BE · 성능 표 · 이관 표, 그다음 관점마다 그림 라벨 → 예시 카드.
+    작업 Jira 절은 티켓 원문 인용이라 뺀다."""
+    texts = sorted(doc.screen, key=lambda t: (SCREEN_ORDER.get(t[0], len(SCREEN_ORDER)), t[1]))
     for v in doc.views:
-        texts += [("label", n.line, n.label) for n in v.nodes.values() if n.label]
-        texts += [("label", e.line, e.label) for e in v.edges if e.label]
+        labels = [("label", n.line, n.label) for n in v.nodes.values() if n.label]
+        labels += [("label", e.line, e.label) for e in v.edges if e.label]
+        texts += sorted(labels, key=lambda t: t[1])
         texts += [("example", ln_no, t) for ln_no, t in v.examples]
+    return texts
+
+
+def _abbr_explained(text: str, m: re.Match) -> bool:
+    """약어 바로 뒤 괄호 풀이 `KB(지식 베이스)` 나, 낱말 바로 뒤 괄호 안의 약어 `지식 베이스(KB)` 이면 참."""
+    if ABBR_AFTER_RE.match(text, m.end()):
+        return True
+    return bool(ABBR_BEFORE_RE.search(text[:m.start()]) and ABBR_BEFORE_CLOSE_RE.match(text, m.end()))
+
+
+def _check_abbreviations(doc: Doc, texts: List[Tuple[str, int, str]]) -> None:
+    """L10 — 목록의 일반 IT 약어는 처음 나올 때 풀어 쓴다. 화면 차례대로 읽어, 풀이가 나오기 전의 등장을 모두 알린다.
+    그림 라벨은 짧아야 하므로 괄호 풀이 대신 풀어 쓴 낱말로 바꾸라고 안내한다(앞 글에서 이미 풀었으면 라벨은 그대로 둔다)."""
+    explained: set = set()
+    first_bare: Dict[str, int] = {}          # 약어 → 풀이 없이 처음 나온 글(라벨 제외)의 줄
+    seen: set = set()
+    for area, ln_no, text in texts:
+        plain = CODE_SPAN_RE.sub(lambda c: " " * len(c.group(0)), text)   # `코드` 안은 코드 이름이라 보지 않는다
+        for name, rx, full in ABBR_RES:
+            hits = list(rx.finditer(plain))
+            if not hits or name in explained:
+                continue
+            if any(_abbr_explained(plain, m) for m in hits):
+                explained.add(name)
+                continue
+            if (ln_no, name) in seen:
+                continue
+            seen.add((ln_no, name))
+            if area == "label":
+                msg = (f"`{name}` — 라벨은 짧게 두므로 괄호 풀이 대신 풀어 쓴 낱말({full})로 바꾼다. "
+                       f"약어를 남기려면 라벨보다 먼저 나오는 글에서 `{name}({full})` 로 풀어 둔다")
+            elif name in first_bare:
+                msg = (f"`{name}` — 앞(L{first_bare[name]})에서도 풀이 없이 나왔다. "
+                       f"처음 나오는 곳을 `{name}({full})` 로 고치면 이 줄은 그대로 둬도 된다")
+            else:
+                first_bare[name] = ln_no
+                msg = (f"`{name}` 풀이가 없다 — 처음 나올 때 `{name}({full})` 나 `{full}({name})` 처럼 붙인다"
+                       "(풀이는 예시 — 다른 뜻으로 썼으면 그 뜻으로)")
+            doc.add("WARN", "L10", area, ln_no, msg)
+
+
+def _check_screen_text(doc: Doc) -> None:
+    """L6 출처 식별자 · L9 직역어 · L10 약어 — 화면에 나오는 글만 본다(작업 Jira 절은 티켓 원문 인용이라 뺀다)."""
+    texts = _screen_texts(doc)
+    _check_abbreviations(doc, texts)
     for area, ln_no, text in texts:
         if area in SOURCE_AREAS:
             for name, rx in SOURCE_ID_RES:
@@ -992,7 +1160,8 @@ def _check_screen_text(doc: Doc) -> None:
 
 def report(doc: Doc) -> str:
     out = [f.text() for f in sorted(doc.findings, key=lambda f: (f.level != "FAIL", f.line))]
-    out.append(f"\n{doc.path.name}: 관점 {len(doc.views)}개 · FAIL {doc.fails} · WARN {doc.warns}")
+    answers = f" · 답 {len(doc.answers)}개" if doc.answers else ""
+    out.append(f"\n{doc.path.name}: 관점 {len(doc.views)}개{answers} · FAIL {doc.fails} · WARN {doc.warns}")
     return "\n".join(out)
 
 

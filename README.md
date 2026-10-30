@@ -44,6 +44,7 @@ One HTML file in the reading order below. Dark and light themes follow the syste
 | 3 | Tabs | Named by chart type only: System architecture, Flowchart, Sequence diagram, Deployment architecture |
 | 3a | System architecture | Tiers laid out left to right, cards with a type icon, a bold name and a type caption. New or changed parts are blue cards. Connectors are straight horizontal and vertical lines; one card has one exit that branches per target |
 | 3b | Flowchart | Mermaid flowchart on the left; real use cases for each path on the right, matched by badge (A, B, C) |
+| 3c | Answers | Optional. For A/B runs or experiment logs: one collapsible row per question, the AS IS and TO BE answers side by side as recorded (markdown tables, lists and code render), with a meta line such as the tool path and time. An expand-all button; everything opens for printing |
 | 4 | Jira | Ticket numbers linked to the tracker, with titles and types. Initiatives are highlighted |
 
 There is no header block, no KPI tiles, and no footer. Tabs and pictures carry the page.
@@ -60,7 +61,9 @@ There is no header block, no KPI tiles, and no footer. Tabs and pictures carry t
 - **Every flowchart path has a real example.** End terminals carry badges and each badge needs a case from logs, tests, experiments, or tickets.
 - **Meaning on the page, sources in the answer.** File paths, `file:line`, commit hashes, and acceptance-criterion IDs are flagged on the page; the Jira section is the one place the page links to evidence, and every Jira key links to its own `/browse/<KEY>` address.
 - **No word-for-word translation of engineering terms.** Korean pages use the terms engineers actually say (오버레이 for overlay, 포인트 읽기 for point read, 불일치 for divergence) instead of literal translations (덮기, 점 읽기, 발산), which readers cannot map back to the code.
+- **Uncommon IT abbreviations are spelled out the first time.** KB, SSOT, TTL, PK and the rest of a fixed list are flagged until they appear as `KB(지식 베이스)` or `지식 베이스(KB)`; diagram labels use the spelled-out words instead. Domain abbreviations and code identifiers are never flagged.
 - **Architecture shows TO BE only.** Mixing a component that is being replaced with the new structure is flagged, and so is a view too wide for the screen.
+- **Answers are quoted, not edited.** Each answer sits in a fence of four or more backticks (```` answer as-is / ```` answer to-be) so headings and code inside it stay intact; the page-text rules (sources, translations, abbreviations) do not apply to quoted answers. An item without an answer fails; more than 30 items is flagged.
 - **Migration maps stay at role level, ten pairs at most,** and each move uses a fixed word (포팅 · 바뀜 · 합침 · 원천 변경 · 새로 · 유지 · 폐기).
 
 ## Install
@@ -111,7 +114,7 @@ skills/system-dashboard/
 ├── agents/openai.yaml                 # Codex skill metadata
 ├── references/diagram-rules.md        # D1–D9 (D8 retired), P1–P3: labels, orphans, arrows, round trips, brokers, TO BE only
 ├── references/symbols.md              # F1–F4 flowchart symbols, architecture shapes, view kinds
-├── references/layout.md               # Page layout, tokens, L1–L7 (AS IS/TO BE, use cases, tables, Jira)
+├── references/layout.md               # Page layout, tokens, L1–L11 (AS IS/TO BE, use cases, tables, answers, Jira, terms)
 ├── assets/dashboard.template.html     # Page shell: theme tokens, tabs, architecture renderer
 ├── assets/dashboard.example.md        # Starting source with every section
 ├── scripts/check_diagrams.py          # Linter: FAIL/WARN with line numbers, exit code 1 on FAIL
